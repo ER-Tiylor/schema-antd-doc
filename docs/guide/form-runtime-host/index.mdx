@@ -1,0 +1,95 @@
+# FormRuntimeHost
+
+一个 `FormInstance` 一份的联动运行时作用域。`SchemaForm` 与两种可编辑表格都会自动创建，
+只有自己拼 `Form` 时才需要手动接。
+
+## 职责
+
+- 登记字段级 `linkage` / `events` 配置；
+- 用户交互后派发 `events` 与非 `immediate` 的 `linkage`；
+- 派发顺序固定：**写 Form Store → events → linkage**；
+- 写入不再隐式触发下一轮联动，避免循环；
+- `immediate` 规则由字段订阅自身依赖值变化驱动，与变更来源无关。
+
+## 快速接入
+
+```tsx
+import { Form } from 'antd';
+import { FormRuntimeHostProvider, SchemaFormField } from '@tianyr/schema-antd';
+
+const [form] = Form.useForm();
+
+<Form form={form}>
+  <FormRuntimeHostProvider form={form}>
+    <SchemaFormField schema={fieldA} />
+    <SchemaFormField schema={fieldB} />
+  </FormRuntimeHostProvider>
+</Form>;
+```
+
+## API
+
+### `FormRuntimeHostProvider`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `form` | `FormInstance` | 作用域绑定的表单 |
+| `children` | `ReactNode` | |
+
+### `useFormRuntimeHost(): FormRuntimeHost | null`
+
+不在 Provider 内时返回 `null`，字段照常渲染，只是没有联动派发。
+
+### `FormRuntimeHost` 实例方法
+
+一般不需要直接调用；两个表格用它派发用户交互。
+
+| 方法 | 说明 |
+| --- | --- |
+| `registerField(schema)` | 返回注销函数；同名字段以最后一次登记为准 |
+| `dispatchUserChange(changed, value, meta)` | 用户交互入口。调用前必须保证新值已写入 Form Store |
+| `runImmediateRulesOf(schema)` | 执行某个字段声明的 `immediate` 规则 |
+
+## 写入上下文 `WriteContext`
+
+`events.onChange(value, ctx)` 与 `linkage.handler(ctx)` 拿到的是同一个形状：
+
+| 方法 / 属性 | 说明 |
+| --- | --- |
+| `get(name)` | 读单个字段 |
+| `getValues()` | 读全部值（含未注册字段） |
+| `form` | 当前 `FormInstance` |
+| `set(name, value)` | 写单个字段；`undefined` 是写值，不是删键 |
+| `setValues(values)` | 批量写；键为顶层字段名，等价于连续 `set`，不额外触发联动 |
+| `clear(name)` | 等价于 `set(name, undefined)` |
+| `clearValues(names)` | 批量清空 |
+
+`FieldEventContext` 在此之上多两个字段：
+
+| 属性 | 说明 |
+| --- | --- |
+| `option` | `onChange` 的第二参数（Select / BizSelect 的选中项） |
+| `meta` | 其余元数据数组 |
+
+## 变更来源
+
+不依赖 antd 的 `onValuesChange`：`setFieldsValue` / `setFields` 走 `external`，
+不会触发它。来源划分是显式的：
+
+| 来源 | 谁触发 | 跑什么 |
+| --- | --- | --- |
+| 用户交互 | `SchemaField.onChange` → `dispatchUserChange` | `events` + 非 immediate 的 `linkage` |
+| 任意变更（初始化 / 回填 / setData） | 字段订阅依赖值变化 | `immediate` 规则 |
+
+## 注意事项
+
+- `dispatchUserChange` 不可重入：派发过程中再次调用会被忽略。
+- `immediate` 规则依赖值未变却重复执行超过 3 次，判定为成环，开发态报错并跳过。
+- `immediate` 写回自己的依赖会形成渲染死循环，开发态会告警。
+- 同一轮联动重复写同一个字段会告警：结果依赖规则执行顺序，应该合并规则。
+
+## 相关
+
+- [SchemaFormField](/guide/schema-form-field/) —— 规则的登记者
+- [SchemaForm](/guide/schema-form/) —— 自动创建 Host
+- [EditableTable](/guide/editable-table/) / [FullEditableTable](/guide/full-editable-table/)

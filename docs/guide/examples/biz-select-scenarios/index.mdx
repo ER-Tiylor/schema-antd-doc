@@ -1,0 +1,55 @@
+# BizSelect 全场景对照
+
+[BizSelect](/guide/biz-select/) 讲的是「怎么用」，这一页讲「每种写法长什么样、边界在哪」：
+标量直用 → schema 配置 → 表格行内 → 对象值 → 辅助能力 → 内联源。
+
+```tsx file="../demos/biz-select-scenarios.tsx" preview
+```
+
+## 一、标量值：直接使用
+
+值是编码，名称由数据源解析。三种来源只是工厂不同：
+
+- `staticList`：前端常量，没有请求；
+- `loaded`：展开时拉一次全量，之后前端过滤；
+- `remote`：输入才搜；只有编码时按值 resolve。
+
+这一节还包括：级联（省份变 → 城市候选失效）、参数门禁（`requiredParams`）、
+展示模式（`V` / `L` / `V-L`）、搜索字段（`searchFields`）、
+详情先带回名称（`seedOptions`，命中就不再 resolve）。
+
+## 二、标量值：schema 配置
+
+`paramsFrom` 在渲染前编译成 `dynamic + linkage`，表单引擎零改动；
+父字段变化会自动清空已选值，`clearOnParent: false` 可以关掉（快照语义）。
+
+## 三、标量值：表格行内
+
+每行一个独立 Form，`ctx.get` 在本行解析，声明与表单里完全一样。
+`field` 的类型收窄成 `AnyFormFieldSchema`，BizSelect 的专有键写在 `props` 里。
+
+## 四、对象值
+
+名称随值存取，不需要 resolve；提交时拆成两列，回显时合成一个对象。
+`valueFields` 只做键名映射（后端就是 `{ code, name }` 时用），不改结构。
+
+## 五、对象值：schema 配置
+
+父字段存对象、下游只要其中一个键时，用 `paramsFrom` 的 `{ from, pick }`：
+
+```ts
+paramsFrom: { userId: { from: 'owner', pick: 'userId' } }
+```
+
+## 六、辅助能力
+
+- `invalidateSelectSource`：让某个源失效并重取，不重新挂载组件；
+- `useCandidates`：同一份候选给别的 UI 用（树、弹窗列表），与组件共用同一个来源键；
+- `BizSelectDisplay`：只有编码的场景按值解析名称，解析不到时显示原始编码。
+
+## 七、内联源
+
+简单场景不注册也能用：纯数据、模块级函数、显式 `cacheKey`。
+内联箭头函数每次渲染都是新引用，缓存永远不命中。
+
+schema 里只能写注册名：schema 是数据，要能序列化、存后端、被生成，函数一律放注册表。

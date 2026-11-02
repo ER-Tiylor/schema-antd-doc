@@ -1,0 +1,174 @@
+# EditableTable
+
+**单活动行编辑**：整张表只有一个 `FormInstance`，同一时刻只有一行挂载可编辑控件。
+适合行数大、逐行录入 / 逐行保存的场景。
+
+## 何时使用
+
+- 行数多（几十到几百行），一次只改一行；
+- 保存是行级动作，改完一行存一行；
+- 需要一个整体校验入口，但不想给每行都建一个 `FormInstance`。
+
+需要全行同时编辑、逐行校验、整表提交，用
+[FullEditableTable](/guide/full-editable-table/)。
+
+| | `EditableTable` | `FullEditableTable` |
+| --- | --- | --- |
+| 状态 | 单个 `FormInstance`，只挂活动行 | 每行一个 `FormInstance`，全行常驻 |
+| 适用 | 行数大，单行编辑 + 行级保存 | 需要全行同时可编辑、逐行校验 |
+| 成本 | 约 `0.24ms / 单元格` | 约 `2.5ms / 单元格` |
+
+1000 个可编辑单元格以内更推荐本组件。
+
+## 基本用法
+
+```tsx file="./demos/basic.tsx" preview
+```
+
+点击某一行进入编辑，保存后回到列表。新增、行内删除、批量删除都会经 `onSetData` 落地，
+`dataSource` 始终由调用方掌握。
+
+## 快速接入
+
+```tsx
+import { EditableTable } from '@tianyr/schema-antd';
+import type { EditableColumn } from '@tianyr/schema-antd';
+
+const columns: EditableColumn<OrderRow>[] = [
+  {
+    title: '品名',
+    dataIndex: 'name',
+    editable: true,
+    field: { type: 'Input', name: 'name', rules: [{ required: true, message: '请填写品名' }] },
+  },
+  { title: '数量', dataIndex: 'qty', editable: true, field: { type: 'InputNumber', name: 'qty' } },
+];
+
+<EditableTable<OrderRow>
+  rowKey="id"
+  columns={columns}
+  dataSource={rows}
+  onSetData={setRows}
+  createRow={() => ({ id: nanoid() })}
+  onSave={async (next, original) => {
+    await api.save(next);
+    setRows((prev) => prev.map((row) => (row.id === original.id ? next : row)));
+  }}
+/>;
+```
+
+## 编辑模型
+
+数据分两层：
+
+- **已确认数据**：`dataSource` 里、由调用方维护的行；
+- **编辑草稿**：活动行在内部 `FormInstance` 里的当前值，不在 `dataSource` 中。
+
+因此 `onSave` 拿到的是「保存后的行 + 原始行」，草稿要读取需要显式调
+`ref.getEditingDraftSync()`。切行、取消、删除时有脏草稿，默认弹「放弃未保存的修改」确认框。
+
+## 列协议 `EditableColumn<T>`
+
+在 antd `ColumnType` 基础上增加两个字段：
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `editable` | `true \| false \| 'read'` | 列形态，见下表 |
+| `field` | `AnyFormFieldSchema` | 同一份扁平字段 Schema；`editable` 为 `true` / `'read'` 时必填 |
+
+| `editable` | 行为 |
+| --- | --- |
+| `true` | 活动行渲染编辑控件，写进本行 Form，参与校验 |
+| `'read'` | 挂字段但只读渲染，值跟随本行 Form（能看到联动带出的值），**不参与校验** |
+| `false` / 缺省 | 不挂字段，单元格直接读行记录，**看不到 Form 里的写值** |
+
+「只读外观 + 仍要校验」用 `true` + `props.disabled`，不要用 `'read'`。
+
+**约束**：`editable` 列的 `field.name` 必须与 `dataIndex` 是同一个规范化 NamePath，
+否则开发态报错。
+
+## API
+
+### `EditableTableProps<T>`
+
+继承 antd `TableProps<T>`（除 `columns` / `rowKey`），额外：
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `rowKey` | `keyof T \| (row) => Key` | 必填 | 行身份 |
+| `columns` | `EditableColumn<T>[]` | 必填 | |
+| `onSave` | `(nextRow, originalRow) => Promise<T \| void> \| T \| void` | 必填 | 默认校验通过后调用；抛错视为保存失败，草稿保留 |
+| `validateOnSave` | `boolean` | `true` | `false` = 行内保存不跑校验，可先存半成品，校验交给 `ref.validate()` |
+| `onDelete` | `(row) => Promise<void> \| void` | — | 有它才渲染行内删除按钮 |
+| `onBeforeEditSwitch` | `(currentRow, nextRow) => boolean \| Promise<boolean>` | — | 有脏差异时切换行的前置判断；返回 false 不切换 |
+| `confirmDiscard` | `false \| (ctx) => boolean \| Promise<boolean>` | 内置 Modal | `false` = 不确认，脏草稿直接丢弃；传函数则自定义确认逻辑 |
+| `onSaveError` | `(error) => void` | 内置 message | 保存失败出口 |
+| `onSetData` | `(rows) => void \| Promise<void>` | — | dataSource 受控，新增 / 批量删除 / `ref.setData` 都经它落地 |
+| `showActions` | `boolean` | `true` | 追加行尾操作列 |
+| `actionsColumnProps` | `Partial<EditableColumn<T>>` | — | 覆盖操作列标题 / 宽度 / fixed |
+| `renderActions` | `(ctx) => ReactNode` | 内置 | 自定义操作列 |
+| `disabled` | `boolean` | — | 整表只读：不进入编辑、不渲染操作列 |
+| `maxHeight` | `number` | — | `scroll.y` 便捷入口，超过后表体自身滚动 |
+| `showAddButton` | `boolean` | 有 `createRow` + `onSetData` 时 | 新增按钮 |
+| `addButtonText` | `string` | `'新增'` | |
+| `createRow` | `() => Partial<T>` | — | 新增行默认值，必须能产出唯一 `rowKey` |
+| `renderFooterExtra` | `(ctx) => ReactNode` | — | 工具条中间插槽 |
+| `showRowSelection` | `boolean` | `false` | 行勾选框 |
+| `showBatchDelete` | `boolean` | `false` | 批量删除按钮（同时会打开勾选） |
+| `batchDeleteText` | `string` | `'批量删除'` | |
+| `toolbarPlacement` | `'top' \| 'bottom'` | `'top'` | |
+| `showButtonIcon` | `boolean` | `false` | 新增 / 批量删除按钮带图标 |
+
+`pagination` 默认 `false`：分页会把行藏起来，与逐行录入相冲。
+
+### `ref: EditableTableRef<T>`
+
+| 方法 | 说明 |
+| --- | --- |
+| `getDataSync()` | 已确认的 dataSource 快照，不含草稿 |
+| `getEditingDraftSync()` | 活动行草稿（原始行 + 表单值合并），无活动行返 `null` |
+| `getEditingRowKey()` | 活动行 key，无则 `null` |
+| `isEditing()` | 是否有活动行 |
+| `isDirty()` | 活动行是否有未保存差异 |
+| `validate()` | 按列 `rules` 逐行校验整表（已确认数据 + 活动行草稿），返回 `{ valid, rows } \| { valid: false, errors }`；不写回、不拦截 |
+| `cancelEdit()` | 结束编辑并丢弃草稿；脏数据需确认；返回是否已退出 |
+| `setData(rows)` | 请求替换已确认数据，成功后才结束编辑 |
+
+`validate()` 与 `validateOnSave={false}` 配套：行内保存放行半成品，提交前显式把关。
+它借一份临时挂载、不显示的校验表单逐行跑规则（`editable === 'read'` 的列不参与），
+跑完即卸载；动态必填等规则按每行的值重新派生。失败项只从返回值给出，不渲染到单元格，
+调用方自己决定怎么提示。它不受 `busy`（校验 / 保存中）影响，也不会改动正在编辑的草稿。
+
+`setData` 的返回值：
+
+- `resolve(true)`：`onSetData` 已成功执行；
+- `resolve(false)`：未做任何改动（用户放弃，或校验 / 保存占用）；
+- `reject`：没提供 `onSetData`（集成错误），或 `onSetData` 自身失败（草稿保留）。
+
+## 数据流
+
+- **数据权威是 `dataSource`**：组件只持有活动行草稿。
+- 保存成功后不隐式修改 props，等待上层刷新；`onSave` 返回 `T` 表示本次确认版本。
+- 新增 / 批量删除必须接 `onSetData`；组件没有自己的数据源。
+- 新增行在新数据真正进入 `dataSource` 后自动进入编辑。
+- 活动行被外部移除时自动退出编辑，避免残留草稿。
+
+## 注意事项
+
+- `maxHeight` 只是 `scroll.y` 的便捷入口；外层不要再包 `overflow` 盒子，否则表头会跟着滚走。
+- `virtual` 不开放：会卸载离屏行，活动行 Form 随之销毁。
+- 同一个 `FormInstance` 跨行复用；切换行时会先 `resetFields` 再写值。
+- 隐藏校验表单会真的渲染列上的控件（只是不显示），所以 `BizSelect` 这类带 `resolve` 的字段
+  在整表校验期间会按行解析回显。校验是显式动作，跑完即卸载；不想承担这部分开销就别用
+  `validateOnSave={false}`，让行内校验拦截即可。
+- 行内删除（`onDelete`）不会自动改 `dataSource`，由调用方落地。
+- 批量删除只删勾选行，同样经 `onSetData`。
+- 脏草稿的确认只有一个出口 `askDiscard`：切换行、取消编辑、行内删除、批量删除、
+  `ref.setData` 覆盖都会经过它。`confirmDiscard={false}` 会把这一路全部改成直接丢弃；
+  `onBeforeEditSwitch` 不等价——它只拦「切换行」，取消与删除仍然会弹框。
+
+## 相关
+
+- [FullEditableTable](/guide/full-editable-table/) —— 全行常驻编辑
+- [SchemaFormField](/guide/schema-form-field/) —— 单元格内部挂的绑定层
+- [registerField](/guide/register-field/) —— 列里能用的字段类型

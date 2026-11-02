@@ -1,0 +1,81 @@
+/* 演示以宽表格为主：默认内容区 1000px 太窄，桌面端放宽一档。
+   用 html:root 提高优先级，避免被主题默认值覆盖。 */
+@media (width >= 1280px) {
+  html:root {
+    --rp-content-max-width: 1200px;
+    --rp-content-padding-x: 56px;
+  }
+}
+
+/* 演示卡片全屏（按钮由 theme/PreviewFullscreen.tsx 注入） */
+.rp-preview--internal__card:fullscreen {
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  overflow: auto;
+  background: var(--rp-c-bg);
+}
+
+/* 不支持 Fullscreen API 时退化成铺满视口 */
+.rp-preview--fallback-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  padding: 24px;
+  overflow: auto;
+  background: var(--rp-c-bg);
+}
+
+.rp-preview-fullscreen-btn svg {
+  display: block;
+}
+
+/* 首页 footer（内容由 rspress.config.ts 的 themeConfig.footer.message 提供） */
+.rp-home-footer {
+  margin-top: 48px;
+  border-top: 1px solid var(--rp-c-divider, rgba(0, 0, 0, 0.08));
+}
+
+.rp-home-footer__message {
+  color: var(--rp-c-text-2, #6b7280);
+  font-size: 14px;
+  text-align: center;
+}
+
+.site-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.9;
+}
+
+.site-footer__brand {
+  color: var(--rp-c-text-1, #1f2937);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.site-footer__links span {
+  opacity: 0.5;
+}
+
+.site-footer a {
+  color: var(--rp-c-text-2, #6b7280);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.site-footer a:hover {
+  color: var(--rp-c-brand, #1677ff);
+}
+
+.site-footer__meta {
+  opacity: 0.8;
+}

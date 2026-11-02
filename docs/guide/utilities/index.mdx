@@ -1,0 +1,82 @@
+# 工具函数
+
+包对外导出的零散工具，都是纯函数。大多数页面用不到，列在这里是为了避免
+调用方自己再写一份不一致的实现。
+
+## `mergeRowValues(initial, values)`
+
+把 Form Store 的值合并回完整业务记录。两种可编辑表格共用。
+
+```ts
+import { mergeRowValues } from '@tianyr/schema-antd';
+
+mergeRowValues({ id: 1, qty: 2, remark: '旧' }, { qty: 3, remark: undefined });
+// { id: 1, qty: 3, remark: undefined }
+```
+
+规则：
+
+- 只合并普通对象；数组、日期等整体替换；
+- 表单里被显式清空（`undefined`）的字段会覆盖初始值，不会被旧数据「复活」；
+- 初始记录不是普通对象时，直接以表单值为准。
+
+## 判脏工具
+
+`EditableTable` 用它判断活动行是否有未保存差异，也可以在自己的保存流程里复用。
+
+| 函数 | 说明 |
+| --- | --- |
+| `cloneSnapshot(row)` | 进入编辑时复制一份逻辑快照：数组与普通对象递归复制，日期等不可变值直接复用 |
+| `isEqualRow(a, b)` | 整行语义比较，等价于 `isEqualValue` |
+| `isEqualValue(a, b)` | 语义比较：Date / dayjs / moment 比时间戳；数组比长度 + 逐项；普通对象取键并集递归；其余对象只认同引用 |
+
+不用 `JSON.stringify`：键顺序、Dayjs 实例、函数都会被误判。
+
+## 只读格式化
+
+### `defaultRenderRead(value, schema)`
+
+内置只读格式化：空值 `—`，日期 / 时间按 `format`，选项类控件从 `options` / `treeData`
+查 label，多值用 `、`，Cascader 拼路径，Checkbox 显示是 / 否，Upload 显示文件名。
+解析不到就显示原始值。
+
+### `renderReadValue(value, schema, definition?)`
+
+完整优先级：
+
+1. `schema.renderRead`
+2. 注册项的 `renderRead`
+3. `defaultRenderRead`
+
+### `EMPTY_TEXT`
+
+只读空值占位，当前是 `'—'`。
+
+```tsx
+import { EMPTY_TEXT, defaultRenderRead } from '@tianyr/schema-antd';
+
+<span>{defaultRenderRead(value, { type: 'Select', props: { options } })}</span>;
+```
+
+## NamePath
+
+### `normalizeNamePath(path)`
+
+把 `string | number | (string | number)[]` 统一成数组。
+
+### `namePathKey(path)`
+
+生成稳定字符串键，用于 Map / 缓存 / 依赖去重。
+`'a'` 与 `['a']` 得到同一个键。
+
+### `getNestedValue(record, path)`
+
+按 NamePath 从对象里取值，路径不存在返回 `undefined`。
+
+```ts
+import { getNestedValue } from '@tianyr/schema-antd';
+
+getNestedValue({ user: { name: '张三' } }, ['user', 'name']); // '张三'
+```
+
+这三个函数主要给自定义字段 / 自定义布局用；普通表单与表格内部已经处理好了。

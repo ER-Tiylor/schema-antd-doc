@@ -1,0 +1,114 @@
+# 快速开始
+
+Schema 驱动的表单与可编辑表格组件库：一份扁平字段配置，同时驱动表单、表格列与联动规则。
+
+## 安装
+
+```bash
+npm install @tianyr/schema-antd antd
+```
+
+`antd` 是 peer 依赖（`^5.20.0`），`dayjs` 随 antd 一起使用。
+
+## 初始化：全局只做一次
+
+字段类型注册表和业务下拉源注册表都是模块级单例，整个应用只有一份。
+把它们收进一个启动模块，应用入口 `import` 一次即可，业务页面不要再重复调用。
+
+```ts
+// src/config/schema.ts —— 副作用模块，import 时执行
+import {
+  defineSelectSources,
+  registerBizSelectField,
+  staticList,
+} from '@tianyr/schema-antd/biz-select';
+
+// 字段类型：BizSelect / BizMultiSelect（包默认只提供标准 antd 控件）
+registerBizSelectField();
+
+// 应用级共用数据源：注册名 → 源实现
+defineSelectSources({
+  province: staticList([
+    { value: 'zj', label: '浙江' },
+    { value: 'js', label: '江苏' },
+  ]),
+});
+```
+
+```ts
+// src/main.tsx
+import '@/config/schema';
+```
+
+约定：
+
+- **应用级共用源**放这里（跨页面复用、或要在 schema 里用字符串 `source` 引用），不传 scope；
+- **页面私有源**留在页面模块：内联给组件，或用第二个参数声明 scope 注册
+  `const S = defineSelectSources({ currency }, 'pur')` → 注册名 `pur:currency`；
+- schema 包本身不产生副作用导入，漏了 `registerBizSelectField()` 会在开发态抛
+  「未注册的字段类型」。
+
+## 1. 普通表单
+
+```tsx
+import { SchemaForm } from '@tianyr/schema-antd';
+import type { FormFieldSchema } from '@tianyr/schema-antd';
+
+const schema: FormFieldSchema[] = [
+  { type: 'Input', name: 'name', label: '名称', rules: [{ required: true, message: '请填写名称' }] },
+  { type: 'BizSelect', name: 'province', label: '省份', source: 'province' },
+];
+
+<SchemaForm schema={schema} columns={2} onFinish={(values) => console.log(values)} />;
+```
+
+详见 [SchemaForm](/guide/schema-form/)。
+
+## 2. 可编辑表格
+
+```tsx
+import { FullEditableTable } from '@tianyr/schema-antd';
+import type { EditableColumn } from '@tianyr/schema-antd';
+
+const columns: EditableColumn<Row>[] = [
+  {
+    title: '品名',
+    dataIndex: 'name',
+    editable: true,
+    field: { type: 'Input', name: 'name', rules: [{ required: true, message: '请填写品名' }] },
+  },
+  { title: '数量', dataIndex: 'qty', editable: true, field: { type: 'InputNumber', name: 'qty' } },
+];
+
+<FullEditableTable<Row> rowKey="id" columns={columns} initialRows={rows} />;
+```
+
+两种编辑模型怎么选，见 [EditableTable](/guide/editable-table/) 与
+[FullEditableTable](/guide/full-editable-table/)。
+
+## 分层关系
+
+```
+SchemaField            只认 value / onChange，不认识表单
+     ↑
+SchemaFormField        具名 Form.Item：dynamic、events、linkage 派发
+     ↑                                ↑
+SchemaForm                 EditableTable / FullEditableTable
+（Form + 布局）             （列 → SchemaFormField，普通行只读派生）
+```
+
+三条不变量贯穿全部组件：
+
+- **一个字段一个值**：组件只产出一个 `name` 一个值，不顺手写别的字段。
+- **转换放边界**：接口形状 ↔ 表单形状在入口/出口各做一次，用 `defineFlatFields`。
+- **显示宁缺毋猜**：解析不到名称就显示原始值，不编一个出来。
+
+## 从哪个页面开始
+
+- 逐行录入、行数大 → [EditableTable](/guide/editable-table/)；
+- 全行同时编辑、整表提交 → [FullEditableTable](/guide/full-editable-table/)；
+- 普通表单与联动 → [SchemaForm](/guide/schema-form/)；
+- 自定义布局里的字段 → [SchemaFormField](/guide/schema-form-field/)；
+- 单个控件 → [SchemaField](/guide/schema-field/)；
+- 业务下拉 → [BizSelect](/guide/biz-select/)；
+- 完整业务页 → [送货明细 · 单活动行](/guide/examples/delivery-single/)。

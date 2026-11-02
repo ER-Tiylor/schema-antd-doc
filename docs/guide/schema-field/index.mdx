@@ -1,0 +1,151 @@
+# SchemaField
+
+把一份字段 Schema 渲染成**一个受控控件**或**一段只读内容**。
+它不处理 `name` / `label` / `rules`，也不持有表单状态——这些属于
+[SchemaFormField](/guide/schema-form-field/) / [SchemaForm](/guide/schema-form/) 层。
+
+## 何时使用
+
+- 单个控件就想用 schema 描述，不要 `Form.Item`、不要校验；
+- 自定义布局里已经自己写了 `Form.Item`，只差控件部分；
+- 表格单元格、只读详情、弹窗里的临时控件。
+
+不适合：
+
+- 需要 `name` / `label` / `rules` / 联动 → 用 `SchemaFormField` 或 `SchemaForm`。
+
+## 基本用法
+
+```tsx file="./demos/basic.tsx" preview
+```
+
+切换「只读」可以看到编辑态与只读态共用同一份 schema：
+只读态会按 `props.options` 解析 label，日期按 `props.format` 格式化。
+
+## 快速接入
+
+```tsx
+import { SchemaField } from '@tianyr/schema-antd';
+import { useState } from 'react';
+
+const [value, setValue] = useState<string>();
+
+<SchemaField
+  schema={{ type: 'Input', props: { placeholder: '请输入' } }}
+  value={value}
+  onChange={(next) => setValue(next as string)}
+/>;
+```
+
+## API
+
+### `SchemaFieldProps`
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `schema` | `AnyFieldSchema` | 必填 | 字段定义 |
+| `value` | `TValue` | — | 受控值 |
+| `onChange` | `(value, ...meta) => void` | — | 统一签名；`meta[0]` 是 Select / BizSelect 的选中项 |
+| `mode` | `'edit' \| 'read'` | `schema.mode ?? 'edit'` | 优先级高于 schema |
+| `disabled` | `boolean` | `schema.props.disabled` | 运行态禁用，优先级最高 |
+| `id` | `string` | — | Form.Item 注入，用于 label 关联与 `scrollToField` |
+
+### `FieldSchema`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `type` | `FieldType` | 控件类型；内置列表见下 |
+| `props` | `Record<string, unknown>` | 透传给控件；受控键会被剔除 |
+| `mode` | `'edit' \| 'read'` | 默认展示形态 |
+| `renderRead` | `(value, schema) => ReactNode` | 只读渲染，优先级最高 |
+
+## 内置字段类型
+
+| 类型 | 控件 | 值属性 |
+| --- | --- | --- |
+| `Input` / `Input.TextArea` / `Input.Password` | antd Input 系列 | `value` |
+| `InputNumber` | InputNumber | `value` |
+| `AutoComplete` | AutoComplete | `value` |
+| `Cascader` | Cascader | `value` |
+| `Checkbox` | Checkbox | `checked` |
+| `CheckboxGroup` | Checkbox.Group | `value` |
+| `ColorPicker` | ColorPicker | `value` |
+| `DatePicker` / `TimePicker` | DatePicker / TimePicker | `value` |
+| `RadioGroup` | Radio.Group | `value` |
+| `Rate` | Rate | `value` |
+| `Select` | Select | `value` |
+| `Slider` | Slider | `value` |
+| `Transfer` | Transfer | `targetKeys` |
+| `TreeSelect` | TreeSelect | `value` |
+| `Upload` | Upload | `fileList` |
+| `BizSelect` / `BizMultiSelect` | 业务下拉 | 需先 `registerBizSelectField()`，见 [BizSelect](/guide/biz-select/) |
+| `Custom` | 字段自带的 `render` | `value`（保留字） |
+
+其余类型用 `registerField` 注册，见 [registerField](/guide/register-field/)。
+
+## 自定义字段（`type: 'Custom'`）
+
+不注册全局类型，`render` 直接写在字段里，仍然享受 `dynamic.props` 与表单绑定。
+
+```tsx
+const scoreField: CustomFieldSchema<number> = {
+  type: 'Custom',
+  props: { max: 5 },
+  render: (ctx) => {
+    if (ctx.mode === 'read') return <Tag>{ctx.value ?? '—'}</Tag>;
+    return (
+      <Space>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <Button key={n} type={ctx.value === n ? 'primary' : 'default'} onClick={() => ctx.onChange(n)}>
+            {n}
+          </Button>
+        ))}
+      </Space>
+    );
+  },
+};
+```
+
+### `CustomRenderContext`
+
+`mode` 是判别联合：只读态**没有** `onChange`，避免误以为可编辑。
+
+| 属性 | edit | read | 说明 |
+| --- | --- | --- | --- |
+| `mode` | `'edit'` | `'read'` | |
+| `value` | ✓ | ✓ | 当前值 |
+| `onChange` | ✓ | ✗ | 编辑态必须提供 |
+| `props` | ✓ | ✓ | 已合并 `dynamic.props`、剔除受控键、注入 `disabled` / `id` |
+| `schema` | ✓ | ✓ | 运行时有效 Schema，满足 `schema.props === props` |
+
+## 只读格式化
+
+只读态调用 `renderReadValue`：
+
+- 空值统一显示 `—`（`EMPTY_TEXT`）；
+- 日期按 `props.format`（默认 `YYYY-MM-DD`），时间默认 `HH:mm:ss`；
+- `Select` / `RadioGroup` / `CheckboxGroup` / `TreeSelect` / `Cascader`
+  从 `props.options` / `treeData` 里找 label，多值用 `、` 连接；
+- `Cascader` 按路径拼成「浙江 / 杭州」；`Checkbox` 显示「是 / 否」；`Upload` 显示文件名；
+- **解析不到就显示原始值，不发请求、不猜**。
+
+只读渲染优先级：
+
+1. `schema.renderRead`
+2. `schema.render({ mode: 'read', ... })`
+3. （未声明 `type: 'Custom'` 时）注册表的 `renderRead`
+4. `defaultRenderRead` 内置格式化
+
+## 注意事项
+
+- 编辑态**不额外包 DOM**，避免影响控件在表格单元格里的宽度与对齐。
+- 未注册的类型：开发态直接抛错，生产态降级成可见的「未知字段类型」。
+- `Custom` 的 `render` 必须是函数；编辑态缺 `onChange` 视为配置错误。
+- 不要依赖 `Form.useFormInstance()` 取值：表格的只读单元格不在本行 Form 里，
+  业务值只能来自 `ctx.value` / `ctx.props`。
+
+## 相关
+
+- [SchemaFormField](/guide/schema-form-field/) —— 加 name / label / rules / 联动
+- [registerField](/guide/register-field/) —— 注册新的字段类型
+- [SchemaForm](/guide/schema-form/) —— 表单层

@@ -1,0 +1,103 @@
+# BizMultiSelect / BizMultiSelectDisplay
+
+业务下拉的多选形态。**独立组件，不是 `BizSelect` 的 `mode` 属性**：
+值类型属于 API 面，合并会把 `BizSelectProps.value` 拓宽成联合，所有存量调用点跟着变宽。
+
+候选、搜索、展示转换、批量解析与单选完全共用；源的签名、工厂参数、缓存与回显规则
+见 [BizSelect](/guide/biz-select/) 的「数据源契约」「源工厂」「行为细节」三节，
+本篇只写多选不一样的部分。
+
+## 何时使用
+
+- 一个字段需要选多个业务对象（仓库、供应商、标签……）；
+- 值希望直接是编码数组，提交时不需要再 `map(item => item.value)`；
+- 需要在 schema 里用 `type: 'BizMultiSelect'`。
+
+不需要多值就用 [BizSelect](/guide/biz-select/)。纯前端固定枚举多选同样支持，
+最短写法是 `options={STATUS}`；也可以用 `source={staticList(...)}` 或 `source={remote(...)}`，
+不要求提前注册。只有手写 antd Form、且不需要回显或只读展示时，直接 `Select mode="multiple"` 才更省事。
+
+## 快速接入
+
+```tsx
+import { BizMultiSelect } from '@tianyr/schema-antd/biz-select';
+
+const [codes, setCodes] = useState<string[]>(['m1', 'm2']);
+
+<BizMultiSelect
+  source="material"
+  params={{ warehouseCode }}
+  value={codes}
+  onChange={(next) => setCodes(next ?? [])}
+  placeholder="请选择物料"
+/>;
+```
+
+schema 里：
+
+```ts
+registerBizSelectField(); // 单选、多选一起注册
+
+const schema = [
+  {
+    type: 'BizMultiSelect',
+    name: 'materialCodes',
+    label: '物料（多选）',
+    source: 'material',
+    paramsFrom: { warehouseCode: 'warehouseCode' },
+    blockedText: '请先选择仓库',
+  },
+];
+```
+
+## API
+
+### `BizMultiSelectProps`
+
+与 `BizSelect` 相同的部分不再重复：
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `source` / `options` / `params` / `displayMode` / `searchFields` / `seedOptions` / `debounceMs` / `cacheKey` / `blockedText` | 同 `BizSelect` | — | |
+| `value` | `SelectValue[] \| BizObjectValue[]` | — | 标量数组或对象数组；也接受单值 / `null` |
+| `onChange` | `(value, options: BizOption[]) => void` | — | **清空时 `value` 为 `undefined`，不是 `[]`** |
+| `valueMode` | `'primitive' \| 'object'` | `'primitive'` | |
+| `valueFields` | `{ value?, label? }` | `{ value:'value', label:'label' }` | 对象数组里每个对象的键名 |
+
+**清空为什么给 `undefined`**：
+
+- 与 `ctx.clear()` 一致；
+- antd 的 `required` 规则拿空数组没辙（`[]` 是真值），`undefined` 才能让必填天然生效。
+
+### `BizMultiSelectDisplayProps`
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `value` | `SelectValues \| SelectValue \| BizObjectValue` | — | 单个值也接受 |
+| `emptyText` | `ReactNode` | `'—'` | |
+| `separator` | `string` | `'、'` | 多值分隔符 |
+| 其余 | 同 `BizSelectDisplay` | — | |
+
+解析不出的编码原样显示，状态说明挂在 `title` 上。
+
+## 与单选的两处差异
+
+| | `BizSelect` | `BizMultiSelect` |
+| --- | --- | --- |
+| 搜索态是否补回已选项 | 不补（避免结果里混进不匹配记录） | **始终补**（antd 的 tag 文本从候选里查，不补会整排变裸编码） |
+| 回显成本 | 单条 `resolve` | 每个编码一次解析；源应声明 `resolveMany` |
+| 清空值 | `undefined` | `undefined`（不是 `[]`） |
+
+## 注意事项
+
+- 没有 `resolveMany` 时，选 5 个值就是 5 个请求；表格 / 表单里常见多选场景建议声明批量接口。
+- `resolveMany` 返回的记录与 `search` 使用同一份 `recordFields`；形状不同就在函数里先归一化。
+- 多选**不要配 `defineFlatFields`**：后端常是 `codes[]` + `names[]`，按顺序 zip 前端无法验证，
+  不同序会把名称串到别的编码上且不报错。多选表单直接存编码数组。
+- 值对象模式（`valueMode="object"`）会把 `{ value, label }` 随值一起存，名称不丢失。
+- schema 里单选 / 多选共用 `paramsFrom` / `clearOnParent` / `blockedText`，清空语义不变。
+
+## 相关
+
+- [BizSelect](/guide/biz-select/) —— 单选
+- [useResolvedLabels](/guide/use-resolved-labels/) —— 批量解析

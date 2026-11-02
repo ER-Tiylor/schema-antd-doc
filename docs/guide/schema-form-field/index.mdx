@@ -1,0 +1,89 @@
+# SchemaFormField
+
+**唯一的具名字段绑定层**。普通表单、单活动行表格、全行常驻表格都复用它，
+不另建第二套 `Form.Item` 绑定。
+
+它负责：
+
+- 具名 `Form.Item`（`name` / `label` / `rules` / `dependencies`）；
+- `dynamic` 派生（visible / disabled / required / rules / props）；
+- 隐藏时跳过校验；
+- 把用户交互交给 `FormRuntimeHost` 派发 `events` 与 `linkage`；
+- 只读态：不注册具名 Form.Item，但保留 label 与布局。
+
+## 何时使用
+
+- 自己写了 `Form`，但想复用字段绑定与联动语义；
+- 自定义布局（分栏、卡片、步骤条）里放 schema 字段；
+- 表格单元格里需要「跟随本行 Form」的字段（两种可编辑表格内部就是这么用的）。
+
+普通表单直接用 [SchemaForm](/guide/schema-form/) 即可，不需要手写它。
+
+## 快速接入
+
+```tsx
+import { Form } from 'antd';
+import { FormRuntimeHostProvider, SchemaFormField } from '@tianyr/schema-antd';
+
+function CustomLayout() {
+  const [form] = Form.useForm();
+  return (
+    <Form form={form}>
+      <FormRuntimeHostProvider form={form}>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <SchemaFormField
+            schema={{
+              type: 'Input',
+              name: 'name',
+              label: '名称',
+              rules: [{ required: true, message: '请填写名称' }],
+            }}
+          />
+        </div>
+      </FormRuntimeHostProvider>
+    </Form>
+  );
+}
+```
+
+## API
+
+### `SchemaFormFieldProps`
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `schema` | `AnyFormFieldSchema` | 必填 | 字段定义，与 `SchemaForm` 的数组元素同形 |
+| `compact` | `boolean` | `false` | 表格单元格用：不渲染 label，`marginBottom: 0` |
+| `mode` | `'edit' \| 'read'` | 字段自身 | 表单级只读覆盖 |
+| `disabled` | `boolean` | — | 表单级禁用，永远优先 |
+
+只读态的行为：
+
+- 不传 `name`，因此**不注册具名 Form.Item、不参与校验**；
+- 仍然渲染 `Form.Item`（只不带 name），所以 label 与布局与编辑态一致；
+- 值通过 `Form.useWatch` 订阅，能看到 `events` / `linkage` 写进来的值。
+
+## 示例：表格单元格
+
+```tsx
+<SchemaFormField schema={column.field!} compact disabled={busy} />
+```
+
+`EditableTable` 的活动行与 `FullEditableTable` 的全部行都这样挂载字段；
+非活动行不创建 Form.Item，直接按行记录取只读值。
+
+## 注意事项
+
+- 必须位于 `Form` 内（否则 `Form.useFormInstance()` 报错）。
+- 联动派发依赖 `FormRuntimeHostProvider`；不在 Provider 内时字段照常渲染，
+  只是 `events` / `linkage` 不生效（`useFormRuntimeHost()` 返回 `null`）。
+- `schema.dynamic.dependencies` 缺失时开发态只告警一次，并按静态字段处理。
+- `immediate` 规则由本组件订阅依赖值后触发；普通规则只响应用户交互。
+- 组件已 `memo`；schema 若是内联对象，父组件每次渲染都会导致重新绑定，
+  模块级常量是更好的写法。
+
+## 相关
+
+- [SchemaField](/guide/schema-field/) —— 实际控件渲染
+- [FormRuntimeHost](/guide/form-runtime-host/) —— 联动派发
+- [SchemaForm](/guide/schema-form/) —— 自动提供 Provider 的表单壳

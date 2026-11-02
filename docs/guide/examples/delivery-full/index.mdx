@@ -1,0 +1,40 @@
+# 送货明细 · 全行常驻编辑
+
+和上一个示例同一份业务、同一套列，只换表格组件：每行一个 `FormInstance`，
+所有行同时可编辑，支持行内插入 / 删除，整表校验通过后一起提交。
+
+```tsx file="../demos/delivery-full.tsx" preview
+```
+
+## 与单活动行版本的区别
+
+| | 单活动行 | 全行常驻 |
+| --- | --- | --- |
+| 组件 | [EditableTable](/guide/editable-table/) | `FullEditableTable` |
+| 状态 | 整表一个 Form，只挂活动行 | 每行一个 Form，全行常驻 |
+| 保存 | 逐行 `onSave` | 整表 `onSubmit` |
+| 结构操作 | 追加 / 删除 / 批量删除 | 追加 / 行内插入 / 删除 / 批量删除 |
+| 数据读取 | `dataSource` + 草稿 | `ref.getDataSync()` |
+| 成本 | 约 `0.24ms / 单元格` | 约 `2.5ms / 单元格` |
+
+联动场景与单活动行版本完全一致：省份 → 城市 / 区县 / 商品 / 配送方式；
+商品 → 单价与金额；自提 → 送达时段禁用并清空；发票抬头显隐与必填；
+金额超 1000 → 备注必填；增值服务选项随商品与配送方式变化；
+客户是 BizSelect 按省份查；手机号整组规则替换；数量按商品类别限购。
+
+## 数据都在各行 Form 里
+
+`initialRows` 只在初始化与 `setData` 时生效，不会随 props 变化覆盖用户输入。
+读取当前值用 `ref.getDataSync()`，页面上「刷新下方数据」就是显式调它一次；
+改任何一格也会通过 `onRowValuesChange` 自动刷新。
+
+## 操作列
+
+新增 / 行内插入 / 行内删除默认开启，`actionColumnProps` 可以改标题、宽度与 `fixed`：
+
+```tsx
+<FullEditableTable
+  actionColumnProps={{ fixed: 'right' }}
+  onSubmit={(rows) => api.save(rows)}
+/>
+```

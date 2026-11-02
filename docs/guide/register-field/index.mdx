@@ -1,0 +1,95 @@
+# registerField / 字段注册表
+
+字段类型的注册表：`type` → 控件、受控属性名、取值函数、只读渲染、归一化。
+它只描述「怎么渲染一个受控控件」，不承担 Form 绑定、校验和联动——那些在
+[SchemaFormField](/guide/schema-form-field/)。
+
+## 何时使用
+
+- 业务有自己的控件（行政区选择、富文本、自定义业务组件），希望 schema 里直接用 `type: 'Xxx'`；
+- 想覆盖某个内置类型的行为（必须显式 `{ override: true }`）；
+- 想给已有控件换受控属性名或补充 `renderRead`。
+
+只是一次性的局部控件：用 `type: 'Custom'`，不要注册全局类型，见
+[SchemaField · 自定义字段](/guide/schema-field/#自定义字段typecustom)。
+
+## 快速接入
+
+```tsx
+import { registerField } from '@tianyr/schema-antd';
+import { InputNumber } from 'antd';
+
+registerField('Money', {
+  component: InputNumber,
+  // 只读时自定义格式；返回 undefined 会退回内置格式化
+  renderRead: (value) => (value == null ? '—' : `¥ ${Number(value).toFixed(2)}`),
+});
+
+// schema 里直接写
+{ type: 'Money', name: 'amount', label: '金额' }
+```
+
+## API
+
+### `registerField(type, definition, options?)`
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `type` | `string` | 类型名；`'Custom'` 是保留字，注册会被拒绝并告警 |
+| `definition` | `FieldDefinition` | 见下 |
+| `options.override` | `boolean` | 已注册时默认拒绝，覆盖必须显式声明 |
+
+### `FieldDefinition`
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `component` | `ComponentType<any>` | 必填 | 受控控件 |
+| `valuePropName` | `string` | `'value'` | 受控值属性名（`Checkbox` 用 `checked`，`Upload` 用 `fileList`） |
+| `getValueFromEvent` | `(...args) => T` | 取第一个参数 | 从原始事件参数里取出业务值 |
+| `renderRead` | `(value, props) => ReactNode` | — | 只读展示；返回 `undefined` 退回内置格式化 |
+| `normalize` | `(schema) => schema` | — | 渲染前归一化字段定义；**必须是纯函数且可缓存** |
+
+### 查询
+
+| 函数 | 说明 |
+| --- | --- |
+| `getFieldDefinition(type)` | 取注册项 |
+| `getRegisteredFieldTypes()` | 列出全部已注册类型 |
+
+## 内置类型
+
+```
+Input / Input.TextArea / Input.Password / InputNumber
+AutoComplete / Cascader / Checkbox / CheckboxGroup / ColorPicker
+DatePicker / RadioGroup / Rate / Select / Slider
+TimePicker / Transfer / TreeSelect / Upload
+```
+
+`BizSelect` / `BizMultiSelect` 由使用方调用 `registerBizSelectField()` 注册，
+包本身不产生副作用导入。
+
+## `normalize` 的约定
+
+`normalize` 用来把类型专有属性编译成引擎认识的 shape，典型是
+`BizSelect` 的 `paramsFrom` → `dynamic` + `linkage`。
+
+- 必须是纯函数：同样的输入返回相同结构；
+- 会按 schema 对象缓存结果，所以**不要返回新对象却不复用输入**的写法；
+  每次渲染新建 schema 也会让缓存失效；
+- 归一化在 `dynamic` 判断之前执行：类型专有属性可以就地编译出 `dependencies`。
+
+## 注意事项
+
+- **注册是全局的**：注册表是模块级 `Map`，整个应用只有一份。在应用入口
+  （或一个启动模块）调用一次即可，不要在每个页面里重复调。
+- 重复注册默认被拒绝并告警；HMR 场景显式传 `{ override: true }`。
+- `'Custom'` 不能注册：它在 `SchemaField` 里先于注册表分支，由字段自身 `render` 提供。
+- 注册项只负责渲染，不负责 `name` / `label` / `rules`。
+- 组件拿到的 `props` 已剔除 `value` / `defaultValue` / `onChange`，这些通道由表单接管。
+- 未注册的类型：开发态直接抛错，生产态显示「未知字段类型」。
+
+## 相关
+
+- [SchemaField](/guide/schema-field/) —— 渲染层与 `Custom` 字段
+- [SchemaFormField](/guide/schema-form-field/) —— Form 绑定层
+- [SchemaForm](/guide/schema-form/) —— 表单层

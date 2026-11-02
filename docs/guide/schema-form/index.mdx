@@ -1,0 +1,181 @@
+# SchemaForm
+
+用一份扁平的字段数组组织普通表单。表单状态仍然完全交给 antd 的 `FormInstance`，
+`SchemaForm` 只负责三件事：**布局**、**字段绑定**、**联动运行时**。
+
+## 何时使用
+
+- 页面 / 弹窗里有一个普通表单，字段数量会增长，想用配置而不是 JSX 堆 `Form.Item`；
+- 同一个字段既要出现在表单里，又要出现在表格列里（两边共用 `FormFieldSchema`）；
+- 需要「父字段变化 → 子字段禁用 / 清空 / 换选项」这类联动，但不想每页手写 `useWatch`。
+
+不适合：
+
+- 一两个固定字段，直接写 antd `Form` 更直观；
+- 需要完全自定义布局（左右分栏、步骤条）——可以用
+  [SchemaFormField](/guide/schema-form-field/) 自己拼。
+
+## 基本用法
+
+```tsx file="./demos/basic.tsx" preview
+```
+
+建议按顺序操作：切换合同类型 → 看「补充协议号」出现且必填；
+改数量 / 单价 → 看总价实时计算；选省份 → 城市选项跟着换；
+把总价调到 50 万以上 → 备注变成必填。
+
+## 快速接入
+
+```tsx
+import { SchemaForm } from '@tianyr/schema-antd';
+import type { FormFieldSchema } from '@tianyr/schema-antd';
+
+const schema: FormFieldSchema[] = [
+  { type: 'Input', name: 'name', label: '名称', rules: [{ required: true, message: '请填写名称' }] },
+  { type: 'InputNumber', name: 'qty', label: '数量' },
+];
+
+<SchemaForm schema={schema} columns={2} onFinish={(values) => console.log(values)} />;
+```
+
+## API
+
+### `SchemaFormProps`
+
+继承 antd `FormProps`（`form` / `initialValues` / `onFinish` / `layout` / `labelCol` 等全部透传），
+额外增加：
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `schema` | `AnyFormFieldSchema[]` | 必填 | 字段数组，见下方字段协议 |
+| `columns` | `number` | `1` | 栅格列数，内部用 CSS Grid |
+| `mode` | `'edit' \| 'read'` | 字段自身 `mode` | 表单级只读，强制覆盖所有字段 |
+| `disabled` | `boolean` | — | 表单级禁用，优先级最高 |
+| `children` | `ReactNode` | — | 允许混用原生 `Form.Item`，共享同一个 `FormInstance` |
+
+`columns` 最小为 1；每个字段的 `colSpan` 会被夹在 `1..columns` 之间。
+
+### 字段协议 `FormFieldSchema`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `name` | `NamePath` | 字段名，支持 `'a' \| ['a','b'] \| 0` |
+| `type` | `FieldType` | 控件类型，内置列表见 [registerField](/guide/register-field/) |
+| `label` | `ReactNode` | Form.Item 标签 |
+| `props` | `Record<string, unknown>` | 透传给控件；`value` / `defaultValue` / `onChange` 会被剔除 |
+| `rules` | `Rule[]` | antd 校验规则 |
+| `mode` | `'edit' \| 'read'` | 字段级只读 |
+| `visible` | `boolean` | 静态显隐；隐藏即不渲染、不校验 |
+| `hidden` | `boolean` | 存量兼容，新业务不要与 `visible` 同时声明 |
+| `dependencies` | `NamePath[]` | 只传给 Form.Item 做校验依赖，不参与 `dynamic` 订阅 |
+| `dynamic` | `DynamicConfig` | 运行时派生，见下 |
+| `linkage` | `LinkageRule[]` | 联动规则，见下 |
+| `events` | `{ onChange? }` | 字段自身交互副作用 |
+| `colSpan` | `number` | 跨列数 |
+| `formItemProps` | `Omit<FormItemProps, ...>` | 透传给 Form.Item（tooltip / extra / validateTrigger 等） |
+| `renderRead` | `(value, schema) => ReactNode` | 自定义只读渲染 |
+| `render` | `(ctx) => ReactNode` | 仅 `type: 'Custom'`，见 [SchemaField](/guide/schema-field/) |
+
+## `dynamic`：派生配置
+
+`dependencies` 必须显式列出所有影响派生结果的字段，**不做自动依赖收集**。
+
+```tsx
+{
+  type: 'Select',
+  name: 'city',
+  label: '城市',
+  dynamic: {
+    dependencies: ['province'],
+    disabled: (ctx) => !ctx.get('province'),
+    props: (ctx) => ({ options: CITIES[ctx.get('province') as string] ?? [] }),
+  },
+}
+```
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `dependencies` | `NamePath[]` | 必填（缺失时开发态告警，按静态字段处理） |
+| `visible` | `boolean \| (ctx) => boolean` | 优先级高于静态 `visible` / `hidden`；隐藏即不渲染、不校验 |
+| `disabled` | `boolean \| (ctx) => boolean` | 字段级禁用；表单级 `disabled` 仍然优先 |
+| `required` | `boolean \| (ctx) => boolean` | 为 true 时补一条 required 规则，为 false 时移除现有 required |
+| `rules` | `Rule[] \| (ctx) => Rule[]` | **整体替换** `schema.rules`；要用动态规则时记得把 required 一起写进去 |
+| `props` | `Record \| (ctx) => Record` | 浅合并到静态 `props` 上 |
+
+编辑态与只读态共用同一份派生结果：只读里的 `options`、`format`、`queryParams`
+同样来自 `dynamic.props`。
+
+## `linkage`：写值
+
+```tsx
+linkage: [
+  {
+    dependencies: ['qty', 'price'],
+    immediate: true,   // 初始化、回填、setData 也执行（默认只在用户交互时执行）
+    handler: (ctx) => ctx.set('amount', Number(ctx.get('qty') ?? 0) * Number(ctx.get('price') ?? 0)),
+  },
+]
+```
+
+| 属性 | 说明 |
+| --- | --- |
+| `dependencies` | 触发本规则的字段；用户改其中任一字段后执行 |
+| `handler(ctx)` | 写入入口只有 `ctx.set` / `ctx.setValues` / `ctx.clear` / `ctx.clearValues` |
+| `immediate` | 默认 `false`。为 `true` 时不区分变更来源（初始化 / 回填 / `setData` 都跑） |
+
+`ctx` 的写入**不会**再触发下一轮联动，避免循环。需要串联时把规则写成一条，
+或者用 `ctx.setValues` 一次写完。
+
+## `events`：字段交互副作用
+
+```tsx
+events: {
+  onChange: (value, ctx) => {
+    // option 是 Select / BizSelect 的选中项
+    ctx.set('materialUnit', ctx.option?.raw?.unit);
+  },
+}
+```
+
+派发顺序固定：**先写 Form Store → 再派发 `events` → 再派发依赖该字段的非 immediate `linkage`**。
+所以 `ctx.get()` 读到的一定是刚写入的新值。
+
+## 示例：金额自动计算
+
+```tsx
+const schema: FormFieldSchema[] = [
+  { type: 'InputNumber', name: 'qty', label: '数量' },
+  { type: 'InputNumber', name: 'price', label: '单价' },
+  {
+    type: 'InputNumber',
+    name: 'amount',
+    label: '金额',
+    linkage: [
+      {
+        dependencies: ['qty', 'price'],
+        immediate: true,
+        handler: (ctx) =>
+          ctx.set('amount', Number(ctx.get('qty') ?? 0) * Number(ctx.get('price') ?? 0)),
+      },
+    ],
+  },
+];
+```
+
+## 注意事项
+
+- **schema 尽量放模块级常量**。组件会按 schema 对象缓存字段类型的归一化结果；
+  每次渲染新建一份会让缓存和下游 memo 全部失效。内联 schema 功能正常，只是白跑。
+- 隐藏字段保留注册与值，只跳过校验；不要用「卸载 Form.Item」来改变校验语义。
+- `props` 里的 `value` / `defaultValue` / `onChange` 会被剔除，受控通道由表单接管。
+- `mode="read"` 时不注册具名 Form.Item，因此不参与校验；只读展示优先级见
+  `defaultRenderRead` / `schema.renderRead`。
+- `FormRuntimeHostProvider` 由 `SchemaForm` 自动提供；自己拼 `Form` 时用
+  `SchemaFormField` 需要手动包一层，见 [FormRuntimeHost](/guide/form-runtime-host/)。
+
+## 相关
+
+- [SchemaFormField](/guide/schema-form-field/) —— 字段绑定层
+- [SchemaField](/guide/schema-field/) —— 控件渲染层
+- [FormRuntimeHost](/guide/form-runtime-host/) —— 联动运行时
+- [defineFlatFields](/guide/define-flat-fields/) —— 详情回填 / 提交时的形状转换

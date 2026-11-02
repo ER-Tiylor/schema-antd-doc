@@ -1,0 +1,85 @@
+# useResolvedLabels
+
+一屏只有编码、没有名称时的批量解析：表格列、列表卡片、导出预览。
+页面调一次，得到「编码 → 选项」的映射；结果也能直接当 `seedOptions` 传给单元格。
+
+## 何时使用
+
+- 列表接口只返回 `materialCode` / `supplierId`，名称要另外查；
+- 同一屏有几十个编码，不希望每个单元格各发一次请求；
+- 有限枚举且量不大时，更好的做法是用 `loaded` 型源一次拉全量，再按需查表。
+
+## 快速接入
+
+```tsx
+import { useResolvedLabels } from '@tianyr/schema-antd/biz-select';
+
+function OrderTable({ rows }: { rows: OrderRow[] }) {
+  const { byCode, loading, requests } = useResolvedLabels({
+    source: 'material',
+    params: { warehouseCode },
+    values: rows.map((row) => row.materialCode),
+  });
+
+  return (
+    <Table
+      loading={loading}
+      dataSource={rows}
+      columns={[
+        { title: '编码', dataIndex: 'materialCode' },
+        {
+          title: '名称',
+          render: (_, row) => byCode.get(String(row.materialCode))?.label ?? row.materialCode,
+        },
+      ]}
+    />
+  );
+}
+```
+
+`requests` 可以显示在调试标签上，确认批量接口真的生效：
+声明了 `resolveMany` 时一屏 100 个编码是 1 次请求，没声明就是 N 次。
+
+## API
+
+### `UseResolvedLabelsOptions`
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `source` | `string \| SelectSource` | — | 注册名或内联源 |
+| `values` | `ReadonlyArray<SelectValue \| null \| undefined>` | — | 这一屏出现的编码；重复、空值会被去掉 |
+| `params` | `Record<string, unknown>` | — | 查询条件；参与缓存键；缺 `requiredParams` 不查 |
+| `cacheKey` | `string` | — | 内联源共享缓存时显式指定 |
+| `batchSize` | `number` | `100` | 每批最多多少个编码，按接口上限配 |
+
+### `UseResolvedLabelsResult`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `byCode` | `Map<string, BizOption>` | 键不带类型前缀，行里的原始值可直接查 |
+| `options` | `BizOption[]` | 解析到的全部选项，可直接当 `seedOptions` |
+| `loading` | `boolean` | |
+| `error` | `boolean` | 批量失败是整片失败，不自动降级成逐条重试 |
+| `blocked` | `boolean` | 缺 `requiredParams`，一个请求都没发 |
+| `requests` | `number` | 本次实际请求数；没声明 `resolveMany` 时等于不同编码数 |
+| `reload()` | `void` | 绕开缓存重查一次 |
+
+## 行为
+
+- 编码集合按排序后拼接做身份，**行顺序变化不会重新请求**。
+- 没有按值查询能力（`resolve` / `resolveMany` 都没有）时不发请求，展示层退回编码。
+- 批量结果按编码拆开写进单条缓存；之后任何单条 `resolve` 直接命中。
+- 源声明了 `resolveMany` 但一次没命中多少编码 → 展示层显示原始编码，不会假装解析成功。
+
+## 注意事项
+
+- 只有接口真的支持 IN 过滤才声明 `resolveMany`：参数名对不上或接口有返回上限都不算支持，
+  查不全会被当成「记录不存在」。
+- 没声明 `resolveMany` 时开发态会告警一次，提示改用批量接口或 `load` 型源。
+- 批量失败不自动逐条重试：一次故障不应放大成 N 个请求。
+- `params` 变化、切租户、换源都会让旧结果失效。
+
+## 相关
+
+- [BizSelect](/guide/biz-select/)
+- [useCandidates](/guide/use-candidates/)

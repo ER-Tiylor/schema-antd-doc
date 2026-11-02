@@ -1,0 +1,156 @@
+# FullEditableTable
+
+**全行常驻编辑**：每一行一个独立 `FormInstance`，所有行同时可编辑，支持结构增删与整表校验提交。
+
+## 何时使用
+
+- 一张小到中等规模的表，所有行都要同时可改；
+- 提交前要逐行校验，错误要能定位到行 / 字段；
+- 需要行内插入、删除这类结构操作。
+
+行数很大、或只是逐行录入，用 [EditableTable](/guide/editable-table/)。
+
+| | `FullEditableTable` | `EditableTable` |
+| --- | --- | --- |
+| 状态 | 每行一个 `FormInstance`，全行常驻 | 单个 `FormInstance`，只挂活动行 |
+| 适用 | 需要全行同时可编辑、逐行校验 | 行数大，单行编辑 + 行级保存 |
+| 成本 | 约 `2.5ms / 单元格` | 约 `0.24ms / 单元格` |
+
+实测（生产构建）：100 行 × 10 列 ≈ 2.5s / 1000 单元格。
+**超过约 1000 个可编辑单元格建议改用 `EditableTable`**；150 行 × 15 列以上没有实测数据。
+
+## 基本用法
+
+```tsx file="./demos/basic.tsx" preview
+```
+
+与 `EditableTable` 的列协议完全一致，差别在编辑模型：
+每行都可编辑、行尾默认带「插入 / 删除」、提交前统一校验整表。
+
+## 快速接入
+
+```tsx
+import { FullEditableTable } from '@tianyr/schema-antd';
+import type { EditableColumn } from '@tianyr/schema-antd';
+
+const columns: EditableColumn<OrderRow>[] = [
+  {
+    title: '品名',
+    dataIndex: 'name',
+    editable: true,
+    field: { type: 'Input', name: 'name', rules: [{ required: true, message: '请填写品名' }] },
+  },
+  { title: '数量', dataIndex: 'qty', editable: true, field: { type: 'InputNumber', name: 'qty' } },
+  // 'read'：不参与校验，但跟随本行 Form，能显示 linkage 写进来的值
+  { title: '金额', dataIndex: 'amount', editable: 'read', field: { type: 'InputNumber', name: 'amount' } },
+];
+
+<FullEditableTable<OrderRow>
+  rowKey="id"
+  columns={columns}
+  initialRows={rows}
+  onSubmit={async (rows) => {
+    await api.save(rows);
+  }}
+/>;
+```
+
+列协议与 `EditableTable` 完全一致，见
+[EditableTable · 列协议](/guide/editable-table/#列协议-editablecolumnt)。
+
+## 编辑模型
+
+- `initialRows` **只在初始化与 `setData` 时读取**，不随 props 变化覆盖用户输入；
+- 每行的值都在自己的 `FormInstance` 里，读取用 `ref.getDataSync()`；
+- `onSubmit` 在整表校验通过后回调；失败走 `onValidationFailed`。
+
+## API
+
+### `FullEditableTableProps<T>`
+
+继承 antd `TableProps<T>`（除 `columns` / `dataSource` / `rowKey` / `components`），额外：
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `columns` | `EditableColumn<T>[]` | 必填 | 列协议见 [EditableTable](/guide/editable-table/) |
+| `initialRows` | `T[]` | `[]` | **只在初始化与 `setData` 时使用**，不随 props 变化覆盖用户输入 |
+| `rowKey` | `keyof T \| (row) => Key` | 内部生成 | 业务行身份；缺省时用稳定本地 key |
+| `createRow` | `() => Partial<T>` | — | 新增行默认值 |
+| `minRows` / `maxRows` | `number` | — | 行数上下限；到达后增删被忽略并开发态告警 |
+| `disabled` | `boolean` | — | 整表只读，同时禁用增删按钮 |
+| `maxHeight` | `number` | — | `scroll.y` 便捷入口 |
+| `showAddButton` | `boolean` | `true` | 底部新增按钮 |
+| `addButtonText` | `string` | `'新增'` | |
+| `showInsertAction` | `boolean` | `true` | 行内「插入」按钮 |
+| `showDeleteAction` | `boolean` | `true` | 行内「删除」按钮 |
+| `insertPosition` | `'before' \| 'after'` | `'after'` | 插入位置 |
+| `actionColumnProps` | `Partial<EditableColumn<T>>` | — | 覆盖内置操作列（标题 / 宽度 / fixed） |
+| `renderFooterExtra` | `(ctx) => ReactNode` | — | 工具条插槽，ctx 多一个 `insertRow` |
+| `showRowSelection` | `boolean` | `false` | 行勾选框 |
+| `showBatchDelete` | `boolean` | `false` | 批量删除（同时打开勾选） |
+| `batchDeleteText` | `string` | `'批量删除'` | |
+| `toolbarPlacement` | `'top' \| 'bottom'` | `'top'` | |
+| `showButtonIcon` | `boolean` | `false` | 按钮图标 |
+| `onSubmit` | `(rows) => Promise<void> \| void` | — | 校验通过后调用 |
+| `onRowValuesChange` | `(rowKey, changed) => void` | — | 观察回调，不是内部同步通道 |
+| `onRowsStructureChange` | `(info) => void` | — | 增 / 插 / 删 / 整表替换通知 |
+| `onValidationFailed` | `(errors) => void` | — | 行级校验失败出口 |
+| `onValidateRows` | `(rows) => RowValidationError[] \| void` | — | 表级校验，行级全部通过后执行 |
+
+`pagination` 默认 `false`：分页会把行藏起来，与逐行录入相冲。
+
+### `ref: FullEditableTableRef<T>`
+
+| 方法 | 说明 |
+| --- | --- |
+| `addRow(record?)` | 追加到末尾 |
+| `insertRow(anchorKey, position, record?)` | 相对锚点插入 |
+| `removeRow(rowKey)` | 删除一行 |
+| `getDataSync()` | 按行序读取每行 Form 当前值，并合并未映射到表单的原始字段 |
+| `validate()` | 返回 `{ valid: true, rows }` 或 `{ valid: false, errors }` |
+| `submit()` | 校验 + `onSubmit`；失败时调用 `onValidationFailed` |
+| `setData(rows)` | 显式替换整表数据并重建身份 |
+
+## 数据流
+
+- 结构（行序 / 行身份）由组件内部管理，`initialRows` 不会在 props 变化时覆盖用户输入。
+- 每行的值保存在该行自己的 `FormInstance` 里，`getDataSync()` 才合并成完整记录。
+- `setData` 会：
+  - 重建行身份与行序；
+  - 刷新既有行的值；
+  - 重算 `dynamic` 派生属性；
+  - **不触发** `linkage` / `events`（例外：`immediate` 规则）。
+- 批量删除会逐行触发 `onRowsStructureChange`，且触发时表格数据已是删除后状态；
+  被删行只通过回调里的 `row` 提供。
+
+### `RowValidationError`
+
+```ts
+{ rowKey: Key; name: NamePath; messages: string[] }
+```
+
+行级校验失败与表级 `onValidateRows` 返回的错误使用同一形状。
+
+## 性能边界
+
+每行一个 `FormInstance` 的代价是可观的，实测（生产构建）：
+
+- 100 行 × 10 列 ≈ 2.5s / 1000 个可编辑单元格，约 `2.5ms / 单元格`；
+- `EditableTable` 约 `0.24ms / 单元格`，便宜约 10 倍。
+
+**超过约 1000 个可编辑单元格建议改用 [EditableTable](/guide/editable-table/)**。
+
+## 注意事项
+
+- `rowKey` 缺失时内部生成稳定 key；业务 key 重复会开发态报错并临时改用本地 key。
+- `virtual` 不开放：虚拟滚动会卸载离屏行，行 Form 随之销毁，输入丢失。
+- `maxHeight` 只是 `scroll.y` 的便捷入口；外层不要包 `overflow` 盒子。
+- 行内「插入 / 删除」默认开启；不需要时显式传 `false`。
+- `onRowValuesChange` 仅用于观察，不要把正确性逻辑挂在这里。
+- 提交不会自动清空表格；成功后由调用方决定刷新还是保留。
+
+## 相关
+
+- [EditableTable](/guide/editable-table/) —— 单活动行编辑
+- [SchemaFormField](/guide/schema-form-field/) —— 每行内部的字段绑定
+- [SchemaForm](/guide/schema-form/) —— 同一套 `dynamic` / `linkage` 语义

@@ -1,0 +1,81 @@
+# useCandidates
+
+把「源里的候选」交给下拉以外的 UI：树、弹窗列表、穿梭框、自定义选择器等。
+它负责解析源、维护来源键、加载 / 搜索 / 防抖 / 取消，返回当前该展示的候选。
+
+## 何时使用
+
+- 想复用 BizSelect 的数据源，但界面不是 `Select`；
+- 同一个页面里树和下拉需要同一份候选；
+- 需要自己控制什么时候加载 / 搜索 / 重试。
+
+只需要显示一个编码的名称：用 [useResolvedLabels](/guide/use-resolved-labels/) 或
+`BizSelectDisplay`。
+
+## 快速接入
+
+```tsx
+import { useCandidates } from '@tianyr/schema-antd/biz-select';
+
+function MaterialTree() {
+  const { options, loading, blocked, open, search, reload } = useCandidates({
+    source: 'material',
+    params: { warehouseCode },
+    searchFields: 'both',
+  });
+
+  useEffect(() => {
+    open(); // 首次需要候选时显式触发（load 型在这里发第一次请求）
+  }, [open]);
+
+  if (blocked) return <Empty description="请先选择仓库" />;
+  return <Tree treeData={options.map((o) => ({ key: o.value, title: o.label }))} />;
+}
+```
+
+## API
+
+### `UseCandidatesOptions`
+
+| 属性 | 类型 | 默认 | 说明 |
+| --- | --- | --- | --- |
+| `source` | `string \| SelectSource` | — | 注册名或内联源；解析与来源键在 Hook 内完成 |
+| `cacheKey` | `string` | — | 内联源跨实例共享缓存时显式指定 |
+| `params` | `Record<string, unknown>` | — | 参与缓存键；变化后在途请求作废 |
+| `searchFields` | `'value' \| 'label' \| 'both'` | 必填 | 前端过滤匹配哪些字段 |
+| `debounceMs` | `number` | `300` | 搜索防抖 |
+
+### `UseCandidatesResult`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `sourceKey` | `string` | 解析后的来源键；要传给别的 Hook 时直接用 |
+| `options` | `BizOption[]` | 当前候选（本地过滤型已按 keyword 过滤） |
+| `echoOptions` | `BizOption[]` | 回显专用：优先未过滤全集 |
+| `keyword` | `string` | 当前关键词 |
+| `loading` | `boolean` | |
+| `error` | `boolean` | 取数失败；调用 `reload()` 重试 |
+| `blocked` | `boolean` | 缺 `requiredParams`，未发请求 |
+| `open()` | `void` | 展开 / 首次展示时调用：`load` 型在这里发第一次请求，纯搜索型取默认候选 |
+| `search(keyword)` | `void` | 输入关键词；本地过滤型只更新 keyword |
+| `resetKeyword()` | `void` | 收起时调用：清 keyword 并作废在途搜索 |
+| `reload()` | `void` | 绕开缓存重取：有关键词重跑搜索，否则重拉全集 |
+
+## 行为
+
+- 候选请求**不会在挂载时自动发出**；需要时调 `open()`。
+- `paramsKey` / `sourceKey` / `namespace` 任一变化：取消在途请求，旧结果自动失效。
+- 结果按「来源 + 租户 + 条件」归属，三元比对不通过就不会被当成当前结果。
+- 缓存：命中 5 分钟、空结果 30 秒、在途共享；`reload()` 会绕开缓存。
+
+## 注意事项
+
+- `source` 与 `params` 可以每帧变化，Hook 内部从 ref 读；不要自己拼来源键。
+- 本地过滤型（`options` / `load`）返回的 `options` 已经过滤过，不要再过一遍。
+- 纯搜索型没有全集，`echoOptions` 只能返回手上这批候选。
+- `searchFields` 是必填：Hook 不知道你想按编码还是名称匹配。
+
+## 相关
+
+- [BizSelect](/guide/biz-select/)
+- [useResolvedLabels](/guide/use-resolved-labels/)

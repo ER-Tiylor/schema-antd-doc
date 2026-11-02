@@ -1,0 +1,111 @@
+# defineFlatFields
+
+表单**边界**的形状转换：详情平铺给出 `partyAId` + `partyACompanyName`，
+表单里想存一个对象——在这两个时刻各做一次搬运。
+
+它是纯函数，不依赖 React / antd，也不认识 BizSelect：
+只认 `{ field, value, label }` 三件事的对应关系，所以日期范围、树选择、级联同样能用。
+
+## 何时使用
+
+- 详情接口平铺 `xxId` / `xxName`，表单里用 `{ value, label }` 对象值；
+- 提交时要再拆回平铺字段；
+- 两个可编辑表格的行数据同样可以直接走它。
+
+不要用它做的事：
+
+- 不要在组件里做转换：组件只产出一个 `name` 一个值，读写别的字段不属于控件；
+- 多选不要用：`codes[]` + `names[]` 要按顺序 zip，前端无法验证顺序。
+
+## 快速接入
+
+```ts
+import { defineFlatFields, ANTD_OBJECT_KEYS } from '@tianyr/schema-antd';
+
+const flat = defineFlatFields(
+  [
+    { field: 'partyA', value: 'partyAId', label: 'partyACompanyName' },
+    { field: 'partyB', value: 'partyBId', label: 'partyBCompanyName' },
+  ],
+  { objectKeys: ANTD_OBJECT_KEYS },
+);
+
+// 详情 → 表单
+form.setFieldsValue({ ...detail, ...flat.toForm(detail) });
+
+// 表单 → 提交
+const payload = { ...detail, ...values, ...flat.toPayload(values) };
+```
+
+## API
+
+### `defineFlatFields(pairs, options?)`
+
+#### `FlatFieldPair`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `field` | `string` | 表单里装对象的字段名。**只支持顶层字段** |
+| `value` | `string` | 平铺结构里装值的键名 |
+| `label` | `string?` | 平铺结构里装名称的键名；省略表示只回传值 |
+
+#### `FlatFieldsOptions`
+
+| 属性 | 类型 | 说明 |
+| --- | --- | --- |
+| `objectKeys` | `{ value?: string; label?: string }` | 对象值内部的键名，缺的按平铺键兜底 |
+
+默认对象键与平铺键**同名**——新约定是 `valueFields` 直接照后端字段名起，
+于是对象是 `{ userId, userName }`、平铺也是 `userId` / `userName`。
+
+存量页面对象用的是 antd 默认键时传 `ANTD_OBJECT_KEYS`（`{ value: 'value', label: 'label' }`）。
+
+#### 返回 `FlatFields`
+
+| 成员 | 说明 |
+| --- | --- |
+| `pairs` | 原样返回的声明 |
+| `toForm(record)` | 平铺 → 对象，只产出声明的字段 |
+| `toPayload(values)` | 对象 → 平铺，只产出声明的键 |
+
+### 语义细节
+
+`toForm`：
+
+- 值不存在 → 显式写 `undefined`，清掉上一次回填的残留；
+- 名称缺失 → 不写 `label` 键，交给组件的 `resolve` / `seedOptions` 补；
+- 只产出声明的字段，不复制其余键。
+
+`toPayload`：
+
+- 表单里**没有这个键** → 跳过，不用 `undefined` 覆盖调用方 `{ ...data }` 里的旧值；
+- 对象值 → 按 `objectKeys` 取值 / 名称；
+- 非对象（标量）→ 按值处理，兼容迁移途中的页面；
+- 键存在但值被清空 → 值和名称两个平铺键都显式给 `undefined`，避免旧值从展开对象里漏出来。
+
+## 示例：值对象用后端字段名
+
+```ts
+const flat = defineFlatFields([{ field: 'user', value: 'userId', label: 'userName' }]);
+
+flat.toForm({ userId: 7, userName: '张三' });
+// { user: { userId: 7, userName: '张三' } }
+
+flat.toPayload({ user: { userId: 7, userName: '张三' } });
+// { userId: 7, userName: '张三' }
+```
+
+## 注意事项
+
+- 声明必须显式写出来，不做自动推导：「看到 `Id` 就当值、看到 `Name` 就当名称」
+  猜错会静默串数据。
+- 定义期就会拒绝重复：表单字段重复、平铺键重复直接抛错。
+- `toForm` 只处理声明的字段；详情里其它字段由调用方自己展开。
+- 与 `valueFields` 配合时注意方向：
+  `valueFields` 决定表单对象存成什么键，`objectKeys` 告诉本工具按什么键读。
+
+## 相关
+
+- [BizSelect](/guide/biz-select/) —— `valueFields` / `recordFields`
+- [BizMultiSelect](/guide/biz-multi-select/) —— 为什么不适用于多选
+- [SchemaForm](/guide/schema-form/) —— 回填与提交
