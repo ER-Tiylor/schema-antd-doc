@@ -7,6 +7,10 @@ export default defineConfig({
   lang: 'zh',
   title: 'schema-antd',
   description: 'Schema 驱动的表单与可编辑表格组件库',
+  // 导航栏图标读的是顶层 site.logo / logoText，
+  // 放到 themeConfig 下不会生效（NavTitle 只认 site 上的字段）
+  logo: '/schema-antd-logo.svg',
+  logoText: 'schema-antd',
   // 演示文件只作为 preview 的源码被引用，不单独生成路由页
   route: {
     exclude: ['**/demos/**'],
@@ -16,8 +20,6 @@ export default defineConfig({
   // 构建期生成每页的 Markdown 版本与 llms.txt / llms-full.txt（AI 友好输出）
   llms: true,
   themeConfig: {
-    logo: '/schema-antd-logo.svg',
-    logoText: 'schema-antd',
     // 标题下方显示「复制 Markdown」与「查看 Markdown / ChatGPT / Claude」
     llmsUI: {
       placement: 'title',

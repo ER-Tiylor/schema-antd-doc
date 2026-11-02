@@ -108,8 +108,13 @@ pnpm build && pnpm preview
 - **演示全屏**：官方预览插件没有全屏能力，`PreviewFullscreen` 向预览卡片操作栏注入按钮，
   优先用 Fullscreen API，不支持时退化为铺满视口的 fixed 层（Esc 退出）。
   官方插件以后若支持全屏，删掉该组件与 `styles.css` 里对应的两条规则即可；
-- **品牌与 footer**：logo 是 `docs/public/schema-antd-logo.svg`，导航栏与首页 hero 共用；
-  首页 footer 走 `themeConfig.footer.message`（支持 HTML，只在首页渲染）。
+- **品牌与 footer**：导航栏图标是 `docs/public/schema-antd-logo.svg`，首页插图是
+  `docs/public/schema-antd-hero.svg`；首页 footer 走 `themeConfig.footer.message`
+  （支持 HTML，只在首页渲染）。
+
+  注意：`logo` / `logoText` 必须写在配置**顶层**，导航栏组件读的是 `site.logo`；
+  放进 `themeConfig` 不会报错也不会生效。另外两个 SVG 都要带上 `width` / `height`，
+  只写 `viewBox` 时个别环境（headless Chrome 截图）会渲染成空白。
 
 内容区默认最大宽度 1000px，宽表格演示偏窄，桌面端已在 `theme/styles.css` 中放宽到 1200px。
 
