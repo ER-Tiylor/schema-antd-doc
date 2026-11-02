@@ -1,0 +1,5 @@
+# pnpm 12 默认启用 minimumReleaseAge（新发布包 24h 内不允许安装）。
+# 文档站紧跟自家包的补丁版本，发布后需要立刻可装，这里按包名豁免；
+# 其余依赖仍受默认策略保护。
+minimumReleaseAgeExclude:
+  - '@tianyr/schema-antd'

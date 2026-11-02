@@ -13,7 +13,7 @@ hero:
       text: 完整示例
       link: /guide/examples/delivery-single/
   image:
-    src: /schema-antd-logo.svg
+    src: /schema-antd-hero.svg
     alt: schema-antd
 features:
   - title: EditableTable

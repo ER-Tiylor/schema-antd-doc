@@ -18,8 +18,8 @@ importers:
         specifier: ^2.0.22
         version: 2.0.23(@rspack/core@2.3.0(@swc/helpers@0.5.23))(micromark-util-types@2.0.3)(micromark@4.0.3)
       '@tianyr/schema-antd':
-        specifier: 0.4.0
-        version: 0.4.0(@ant-design/icons@5.6.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(antd@5.29.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(dayjs@1.11.23)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: 0.4.1
+        version: 0.4.1(@ant-design/icons@5.6.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(antd@5.29.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(dayjs@1.11.23)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       antd:
         specifier: 5.29.3
         version: 5.29.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -355,8 +355,8 @@ packages:
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
 
-  '@tianyr/schema-antd@0.4.0':
-    resolution: {integrity: sha512-qRjB4gcF61YSFdkeG9zy4dAhah6tYqCQrc7vEGcx9OH45TV+7j/wwUi650FuBoafAaTKOCd7dVrj7gkzYmg8Jg==}
+  '@tianyr/schema-antd@0.4.1':
+    resolution: {integrity: sha512-aHS+FC6n91S2taIMytt0jSVtPmOrKS18tSBnIcMiGflwIceGdeYou43fBJ3ZqaLFQIGhLeE2SGUCRKoWlZjU8A==}
     engines: {node: '>=18'}
     peerDependencies:
       '@ant-design/icons': ^5.2.0
@@ -1723,7 +1723,7 @@ snapshots:
     dependencies:
       tslib: 2.9.1
 
-  '@tianyr/schema-antd@0.4.0(@ant-design/icons@5.6.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(antd@5.29.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(dayjs@1.11.23)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@tianyr/schema-antd@0.4.1(@ant-design/icons@5.6.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(antd@5.29.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(dayjs@1.11.23)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
       '@ant-design/icons': 5.6.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       antd: 5.29.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
