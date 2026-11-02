@@ -68,6 +68,35 @@ TimePicker / Transfer / TreeSelect / Upload
 `BizSelect` / `BizMultiSelect` 由使用方调用 `registerBizSelectField()` 注册，
 包本身不产生副作用导入。
 
+## 覆盖内置类型
+
+覆盖是**整条替换，不是合并**：注册表就是 `registry.set(type, definition)`，
+新定义里没写的字段会退回默认值（`valuePropName` = `'value'`，`getValueFromEvent`
+取第一个参数），不会继承旧注册项。所以覆盖一个带额外行为的类型时，必须把它原有的
+行为一起写回来：
+
+| 类型 | 必须一起写回 |
+| --- | --- |
+| `Checkbox` | `valuePropName: 'checked'`、`getValueFromEvent: (e) => e.target.checked` |
+| `Upload` | `valuePropName: 'fileList'`、`getValueFromEvent: (info) => info.fileList` |
+| `Transfer` | `valuePropName: 'targetKeys'` |
+
+其余内置类型只登记了 `component`，覆盖时给组件就够了。业务方的浅层封装
+（加 `viewMode` 分支、统一尺寸与样式，其余属性照常透传）正好属于这一类：
+
+```ts
+import { registerField } from '@tianyr/schema-antd';
+
+// 入口模块里调用一次，放在 App 渲染之前
+registerField('Input', { component: BizInput }, { override: true });
+registerField('Select', { component: BizSelect }, { override: true });
+```
+
+前提是封装层**仍然是受控组件**：接 `value` / `onChange`，其余 props 原样透传。
+只要没改值语义，就不必写 `valuePropName` / `getValueFromEvent`；一旦改了取值通道
+（内部包了 `Form.Item`、把值包成对象、换了事件形状），就得在封装层边界把值转换回
+受控组件的形状，注册项不承担这件事。
+
 ## `normalize` 的约定
 
 `normalize` 用来把类型专有属性编译成引擎认识的 shape，典型是
