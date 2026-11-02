@@ -28,7 +28,7 @@
 读取当前值用 `ref.getDataSync()`，页面上「刷新下方数据」就是显式调它一次；
 改任何一格也会通过 `onRowValuesChange` 自动刷新。
 
-## 操作列
+## 操作列与批量删除
 
 新增 / 行内插入 / 行内删除默认开启，`actionColumnProps` 可以改标题、宽度与 `fixed`：
 
@@ -38,3 +38,17 @@
   onSubmit={(rows) => api.save(rows)}
 />
 ```
+
+多选与批量删除则**默认关闭**：`showRowSelection` 只开勾选框，`showBatchDelete` 开勾选框
+**同时**在工具条加批量删除按钮（`showRowSelection || showBatchDelete` 任一为真就出现勾选列）：
+
+```tsx
+<FullEditableTable
+  showRowSelection
+  showBatchDelete
+  batchDeleteText="批量删除"
+  toolbarPlacement="top"
+/>
+```
+
+批量删除只删勾选行，逐行触发 `onRowsStructureChange`，回调里拿到的已是删除后的数据。

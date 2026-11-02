@@ -664,7 +664,7 @@ export default function DeliveryFullDemo() {
         showIcon
         style={{ marginBottom: 16 }}
         message="同一份业务、同一套列，换成每行一个 Form：所有行同时可编辑，支持行内插入"
-        description="联动场景与⑩一致：选省份 → 城市 / 区县 / 商品 / 配送方式跟着变；选商品 → 单价自动带出，金额实时算；配送方式选「门店自提」→ 送达时段禁用并清空；勾「需要发票」→ 发票抬头出现且必填；金额超过 1000 → 备注必填；换商品 → 增值服务的选项跟着换；「客户」是 BizSelect，候选来自接口、按省份查；「手机号」整组规则随配送方式替换（快递要手机号、自提要座机），「数量」用自定义 validator（生鲜最多 20 件、家电最多 5 件）。区别在于：每行都有自己的 Form，可以同时编辑多行，行尾默认带「插入 / 删除」，整表点「校验」一次性过校验。"
+        description="联动场景与⑩一致：选省份 → 城市 / 区县 / 商品 / 配送方式跟着变；选商品 → 单价自动带出，金额实时算；配送方式选「门店自提」→ 送达时段禁用并清空；勾「需要发票」→ 发票抬头出现且必填；金额超过 1000 → 备注必填；换商品 → 增值服务的选项跟着换；「客户」是 BizSelect，候选来自接口、按省份查；「手机号」整组规则随配送方式替换（快递要手机号、自提要座机），「数量」用自定义 validator（生鲜最多 20 件、家电最多 5 件）。区别在于：每行都有自己的 Form，可以同时编辑多行，行尾默认带「插入 / 删除」，左侧勾选行后底部可「批量删除」，整表点「校验」一次性过校验。"
       />
 
       <Alert
@@ -727,6 +727,9 @@ export default function DeliveryFullDemo() {
         maxHeight={420}
         // 新增 / 行内插入 / 行内删除都默认开启，这里只改一下操作列固定在右侧
         actionColumnProps={{ fixed: 'right' }}
+        // 多选与批量删除默认关闭，两个开关要一起开：先勾选行，再点批量删除
+        showRowSelection
+        showBatchDelete
         createRow={createEmptyRow}
         onRowValuesChange={handleRowValuesChange}
         // 增 / 插 / 删 / 批量删除都会走这里
